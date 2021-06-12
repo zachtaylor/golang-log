@@ -2,8 +2,8 @@ package log
 
 import (
 	"fmt"
-
-	"taylz.io/types"
+	"sort"
+	"strings"
 )
 
 // ColorFormat is a Formatter designed for humans
@@ -25,7 +25,7 @@ func (fmt *ColorFormat) Format(line Line) []byte {
 
 	time := fmt.TimeFmt.FormatTime(line.Time)
 	src := fmt.SrcFmt.FormatSource(line.Source)
-	var sb types.StringBuilder
+	var sb strings.Builder
 	var dirty bool
 
 	if colorCode == "" {
@@ -101,7 +101,7 @@ func (fmt *ColorFormat) Format(line Line) []byte {
 		dirty = false
 	}
 
-	for _, key := range types.DictKeys(line.Fields) {
+	for _, key := range fmt.fieldKeys(line.Fields) {
 		if dirty {
 			sb.WriteByte(' ')
 		}
@@ -122,13 +122,24 @@ func (fmt *ColorFormat) Format(line Line) []byte {
 	return []byte(sb.String())
 }
 
+func (*ColorFormat) fieldKeys(fields Fields) []string {
+	keys, i := make([]string, len(fields)), 0
+	for k := range fields {
+		keys[i] = k
+		i++
+	}
+	sort.Strings(keys)
+	return keys
+
+}
+
 // writeValue records a value representing any type
-func (*ColorFormat) writeValue(sb *types.StringBuilder, arg interface{}) {
+func (*ColorFormat) writeValue(sb *strings.Builder, arg interface{}) {
 	if err, _ := arg.(error); err != nil {
 		sb.WriteString(err.Error())
 	} else if str, _ := arg.(string); len(str) > 0 {
 		sb.WriteString(str)
-	} else if stringer, _ := arg.(types.Stringer); stringer != nil {
+	} else if stringer, _ := arg.(fmt.Stringer); stringer != nil {
 		sb.WriteString(stringer.String())
 	} else {
 		fmt.Fprintf(sb, "%v", arg)

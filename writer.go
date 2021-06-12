@@ -1,11 +1,14 @@
 package log
 
-import (
-	"taylz.io/log/writer"
-	"taylz.io/types"
-)
-
-// NewRollingWriter creates a io.WriteCloser that rotates backing file, named for each day, for a directory
-func NewRollingWriter(path string) types.WriteCloser {
-	return writer.NewRoller(path)
+type Writer interface {
+	New() Writer
+	Add(string, interface{}) Writer
+	With(Fields) Writer
+	Trace(...interface{})
+	Debug(...interface{})
+	Info(...interface{})
+	Warn(...interface{})
+	Error(...interface{})
+	Out(...interface{})
+	Close() error
 }

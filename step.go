@@ -1,23 +1,23 @@
 package log
 
-import "taylz.io/types"
+import "errors"
 
 // Step is a log builder
 type Step struct {
 	finish StepFinisher
-	fields types.Dict
+	fields Fields
 }
 
 // StepFinisher is a hook for Step
 type StepFinisher interface {
 	// Finish completes a line
-	Finish(Level, types.Dict, types.Source, []interface{})
+	Finish(Level, Fields, Source, []interface{})
 }
 
 // NewStep creates a new Step
-func NewStep(finisher StepFinisher, fields types.Dict) Step {
+func NewStep(finisher StepFinisher, fields Fields) Step {
 	if fields == nil {
-		fields = make(types.Dict)
+		fields = make(Fields)
 	}
 	return Step{
 		finish: finisher,
@@ -26,7 +26,7 @@ func NewStep(finisher StepFinisher, fields types.Dict) Step {
 }
 
 // New copies the Step
-func (log Step) New() types.Logger { return log.Copy() }
+func (log Step) New() Writer { return log.Copy() }
 
 // Copy returns a shallow copy of this Step
 func (log Step) Copy() Step {
@@ -38,14 +38,14 @@ func (log Step) Copy() Step {
 }
 
 // Add writes any value to the fields
-func (log Step) Add(k string, v interface{}) types.Logger {
+func (log Step) Add(k string, v interface{}) Writer {
 	copy := log.Copy()
 	copy.fields[k] = v
 	return copy
 }
 
 // With writes all values to the fields
-func (log Step) With(fields types.Dict) types.Logger {
+func (log Step) With(fields Fields) Writer {
 	copy := log.Copy()
 	for k, v := range fields {
 		copy.fields[k] = v
@@ -72,5 +72,10 @@ func (log Step) Error(args ...interface{}) { log.help(LevelError, args) }
 func (log Step) Out(args ...interface{}) { log.help(LevelOut, args) }
 
 func (log Step) help(level Level, args []interface{}) {
-	log.finish.Finish(level, log.fields, types.NewSource(2), args)
+	log.finish.Finish(level, log.fields, NewSource(2), args)
 }
+
+// ErrCannotCloseStep is returned by Step.Close
+var ErrCannotCloseStep = errors.New("cannot close log step")
+
+func (log Step) Close() error { return ErrCannotCloseStep }
