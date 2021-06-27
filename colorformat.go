@@ -135,7 +135,9 @@ func (*ColorFormat) fieldKeys(fields Fields) []string {
 
 // writeValue records a value representing any type
 func (*ColorFormat) writeValue(sb *strings.Builder, arg interface{}) {
-	if err, _ := arg.(error); err != nil {
+	if arg == nil {
+		sb.WriteString("<nil>")
+	} else if err, _ := arg.(error); err != nil {
 		sb.WriteString(err.Error())
 	} else if str, _ := arg.(string); len(str) > 0 {
 		sb.WriteString(str)
