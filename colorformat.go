@@ -17,37 +17,57 @@ type ColorFormat struct {
 	TimeFmt    TimeFormatter
 }
 
-func (fmt *ColorFormat) Format(line Line) []byte {
-	var colorCode string
-	if fmt.Colors != nil && (fmt.ColorTime || fmt.ColorSrc || fmt.ColorMsg) {
-		colorCode = fmt.Colors[line.Level]
+// DefaultColorFormat builds a ColorFormat with some default options
+func DefaultColorFormat(sourcer SourceFormatter, timer TimeFormatter) Formatter {
+	return &ColorFormat{
+		Colors:     DefaultColorMap(),
+		ColorMsg:   true,
+		ColorField: true,
+		SrcFmt:     sourcer,
+		TimeFmt:    timer,
+	}
+}
+
+func (cf *ColorFormat) Format(line Line) []byte {
+	useColor := cf.Colors != nil
+	var colorCode, time, src string
+	if useColor {
+		if code := cf.Colors[line.Level]; code == "" {
+			useColor = false
+		} else {
+			colorCode = code
+		}
+	}
+	if cf.TimeFmt != nil {
+		time = cf.TimeFmt.FormatTime(line.Time)
+	}
+	if cf.SrcFmt != nil {
+		src = cf.SrcFmt.FormatSource(line.Source)
 	}
 
-	time := fmt.TimeFmt.FormatTime(line.Time)
-	src := fmt.SrcFmt.FormatSource(line.Source)
 	var sb strings.Builder
-	var dirty bool
+	var dirty bool // internal: buffer wants spacing at current write index
 
-	if colorCode == "" {
+	if !useColor {
 		if len(time) > 0 {
 			sb.WriteString(time)
 			sb.WriteByte(' ')
 		}
 		sb.WriteByte(line.Level.ByteCode())
-		dirty = true // leave it on now
+		dirty = true // unsafe sb.WriteByte(' ')
 		if len(src) > 0 {
 			sb.WriteByte(' ')
 			sb.WriteString(src)
 		}
 		for _, arg := range line.Args {
 			sb.WriteByte(' ')
-			fmt.writeValue(&sb, arg)
+			cf.writeValue(&sb, useColor, arg)
 		}
 	} else {
 		var incolor bool
 
 		if len(time) > 0 {
-			if fmt.ColorTime {
+			if cf.ColorTime {
 				sb.WriteString(colorCode)
 				incolor = true
 			}
@@ -56,37 +76,39 @@ func (fmt *ColorFormat) Format(line Line) []byte {
 		}
 
 		if len(src) > 0 {
-			if fmt.ColorSrc != incolor {
-				if fmt.ColorSrc {
-					sb.WriteString(colorCode)
-					incolor = true
-				} else {
-					sb.WriteString(ColorOff)
-					incolor = false
-				}
+			if incolor && !cf.ColorSrc {
+				sb.WriteString(ColorOff)
+				incolor = false
 			}
 			if dirty {
 				sb.WriteByte(' ')
 			}
-			sb.WriteString(src)
-			dirty = true
-		}
-
-		if fmt.ColorMsg != incolor {
-			if fmt.ColorMsg {
+			if cf.ColorSrc && !incolor {
 				sb.WriteString(colorCode)
 				incolor = true
-			} else {
-				sb.WriteString(ColorOff)
-				incolor = false
 			}
+			sb.WriteString(src)
+			dirty = true // unsafe sb.WriteByte(' ')
+		}
+
+		if incolor && !cf.ColorMsg {
+			sb.WriteString(ColorOff)
+			incolor = false
+		}
+		if dirty {
+			sb.WriteByte(' ')
+			dirty = false
+		}
+		if cf.ColorMsg && !incolor {
+			sb.WriteString(colorCode)
+			incolor = true
 		}
 
 		for _, arg := range line.Args {
 			if dirty {
 				sb.WriteByte(' ')
 			}
-			fmt.writeValue(&sb, arg)
+			cf.writeValue(&sb, useColor, arg)
 			dirty = true
 		}
 
@@ -97,23 +119,24 @@ func (fmt *ColorFormat) Format(line Line) []byte {
 	}
 
 	if dirty {
-		sb.WriteString("\t\t\t")
+		sb.WriteString("  \t\t")
 		dirty = false
 	}
 
-	for _, key := range fmt.fieldKeys(line.Fields) {
+	for _, key := range cf.fieldKeys(line.Fields) {
 		if dirty {
 			sb.WriteByte(' ')
 		}
-		if fmt.ColorField {
+		if useColor && cf.ColorField {
 			sb.WriteString(colorCode)
 		}
 		sb.WriteString(key)
-		if fmt.ColorField {
+		if useColor {
+			sb.WriteString(ColorGray)
+			sb.WriteByte('=')
 			sb.WriteString(ColorOff)
 		}
-		sb.WriteByte('=')
-		fmt.writeValue(&sb, line.Fields[key])
+		cf.writeValue(&sb, useColor, line.Fields[key])
 		dirty = true
 	}
 
@@ -130,15 +153,26 @@ func (*ColorFormat) fieldKeys(fields Fields) []string {
 	}
 	sort.Strings(keys)
 	return keys
-
 }
 
 // writeValue records a value representing any type
-func (*ColorFormat) writeValue(sb *strings.Builder, arg interface{}) {
+func (*ColorFormat) writeValue(sb *strings.Builder, useColor bool, arg interface{}) {
 	if arg == nil {
+		if useColor {
+			sb.WriteString(TextBold)
+		}
 		sb.WriteString("<nil>")
+		if useColor {
+			sb.WriteString(ColorOff)
+		}
 	} else if err, _ := arg.(error); err != nil {
+		if useColor {
+			sb.WriteString(ColorRed)
+		}
 		sb.WriteString(err.Error())
+		if useColor {
+			sb.WriteString(ColorOff)
+		}
 	} else if str, _ := arg.(string); len(str) > 0 {
 		sb.WriteString(str)
 	} else if stringer, _ := arg.(fmt.Stringer); stringer != nil {

@@ -38,6 +38,26 @@ func (t Level) ByteCode() byte {
 	}
 }
 
+// Lowercase returns a lower case string for
+func (t Level) Lowercase() string {
+	switch t {
+	case LevelTrace:
+		return "trace"
+	case LevelDebug:
+		return "debug"
+	case LevelInfo:
+		return "info"
+	case LevelWarn:
+		return "warn"
+	case LevelError:
+		return "error"
+	case LevelOut:
+		return "out"
+	default:
+		return "<unknown>"
+	}
+}
+
 // GetLevel returns the level named, if valid
 //
 // valid values: "t", "T", "trace", "TRACE", etc...

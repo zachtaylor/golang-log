@@ -35,6 +35,9 @@ const (
 	ColorLightCyan = "\x1b[96m"
 	// ColorWhite is a color coding literal
 	ColorWhite = "\x1b[97m"
+
+	// TextBold
+	TextBold = "\x1b[1m"
 )
 
 // ColorMap is coloration guide

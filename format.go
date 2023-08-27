@@ -10,16 +10,16 @@ type Formatter interface {
 	Format(Line) []byte
 }
 
+// FormatterFunc is a func type implementing Formatter
+type FormatterFunc func(Line) []byte
+
+// Format implements Formatter by calling the function
+func (f FormatterFunc) Format(l Line) []byte { return f(l) }
+
 // SourceFormatter is a strategy for converting Source to string
 type SourceFormatter interface {
 	FormatSource(Source) string
 }
-
-// SourceFormatterString is a string replacement for SourceFormatter
-type SourceFormatterString string
-
-// Format implements SourceFormatter
-func (str SourceFormatterString) FormatSource(Source) string { return string(str) }
 
 // SourceFormatterFunc is a func type implementing SourceFormatter
 type SourceFormatterFunc func(Source) string
@@ -29,12 +29,9 @@ func (f SourceFormatterFunc) FormatSource(src Source) string { return f(src) }
 
 // RestringSourceFormatter attaches Restringer to SourceFormatter
 func RestringSourceFormatter(srcfmt SourceFormatter, restringer Restringer) SourceFormatter {
-	return SourceFormatterFunc(func(src Source) string { return restringer.Restring(srcfmt.FormatSource(src)) })
-}
-
-// ClearSourceFormatter returns a SourceFormatter that only produces empty string
-func ClearSourceFormatter() SourceFormatter {
-	return SourceFormatterString("")
+	return SourceFormatterFunc(func(src Source) string {
+		return restringer.Restring(srcfmt.FormatSource(src))
+	})
 }
 
 // SimpleSourceFormatter returns a SourceFormatter that returns src.String()
@@ -42,7 +39,7 @@ func SimpleSourceFormatter() SourceFormatter {
 	return SourceFormatterFunc(func(src Source) string { return src.String() })
 }
 
-// PrettySourceFormatter returns a SourceFormatter that returns src.File() with ".go" suffix removed, if present
+// PrettySourceFormatter returns a SourceFormatter that doesn't show line numbers
 func PrettySourceFormatter() SourceFormatter {
 	return SourceFormatterFunc(func(src Source) string {
 		f := src.File()
@@ -56,8 +53,9 @@ func PrettySourceFormatter() SourceFormatter {
 	})
 }
 
-// DetailSourceFormatter returns a SourceFormatter that returns src.File() [without ".go"] + ":" + src.Line()
-func DetailSourceFormatter() SourceFormatter {
+// DefaultSourceFormatter returns a SourceFormatter that removes ".go" from the
+// file name (if present), saving line number
+func DefaultSourceFormatter() SourceFormatter {
 	return SourceFormatterFunc(func(src Source) string {
 		f := src.File()
 		if lenf := len(f); lenf < 5 {
@@ -65,9 +63,17 @@ func DetailSourceFormatter() SourceFormatter {
 		} else if f[lenf-3:] != ".go" {
 			return src.String()
 		} else {
-			return f[:lenf-3] + ":" + strconv.FormatInt(int64(src.Line()), 10)
+			return f[:lenf-3] + "#" + strconv.FormatInt(int64(src.Line()), 10)
 		}
 	})
+}
+
+// TwentyFiveSourceFormatter uses DefaultSourceFormatter with exact length 25
+func TwentyFiveSourceFormatter() SourceFormatter {
+	return RestringSourceFormatter(
+		DefaultSourceFormatter(),
+		RestringerLenExact(25),
+	)
 }
 
 // TimeFormatter is used to format time values
@@ -81,29 +87,14 @@ type TimeFormatterFunc func(t time.Time) string
 // Format implements TimeFormatter using the func ptr
 func (f TimeFormatterFunc) FormatTime(t time.Time) string { return f(t) }
 
-// TimeFormatterConstant is used to return constant string as a TimeFormatter
-type TimeFormatterConstant string
-
-// Format implements TimeFormatter by returning the same string
-func (str TimeFormatterConstant) FormatTime(t time.Time) string { return string(str) }
-
 // TimeFormatString is a string that passes itself to time.Format
 type TimeFormatString string
 
 // Format returns time package formatting given this format string
-func (str TimeFormatString) FormatTime(time time.Time) string {
-	return time.Format(string(str))
-}
-
-// ClearTimeFormatter returns a TimeFormatter that only produces empty string
-func ClearTimeFormatter() TimeFormatter {
-	return TimeFormatterConstant("")
-}
+func (str TimeFormatString) FormatTime(time time.Time) string { return time.Format(string(str)) }
 
 // DefaultTimeFormatter returns a TimeFormatter that uses using 24-hour time format ("15:04:05")
-func DefaultTimeFormatter() TimeFormatter {
-	return TimeFormatString("15:04:05")
-}
+func DefaultTimeFormatter() TimeFormatter { return TimeFormatString("15:04:05") }
 
 // FormatStringLenExact returns a string of set size, elided (from the left) if longer, or right-padded if shorter
 func FormatStringLenExact(str string, size int) string {

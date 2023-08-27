@@ -10,16 +10,12 @@ type Liner interface {
 	io.Closer
 }
 
-// // LinerFunc is a func type that implements Liner
-// type LinerFunc func(Line)
-
-// func (f LinerFunc) Line(line Line) { f(line) }
-
 type routineLiner struct {
 	in    chan Line
 	liner Liner
 }
 
+// RoutineLiner creates a Liner which uses a goroutine
 func RoutineLiner(buf int, l Liner) Liner {
 	rl := &routineLiner{
 		in:    make(chan Line, buf),
@@ -55,7 +51,7 @@ type ioLiner struct {
 	out io.WriteCloser
 }
 
-// IOLiner returns a Liner that is backed by Formater and io.Writer
+// IOLiner returns a Liner that is backed by Formatter and io.Writer
 func IOLiner(f Formatter, w io.WriteCloser) Liner {
 	return ioLiner{f, w}
 }

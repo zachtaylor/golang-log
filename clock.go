@@ -14,5 +14,5 @@ type ClockFunc func() time.Time
 // Now returns f()
 func (f ClockFunc) Now() time.Time { return f() }
 
-// DefaultClock creates a Clock from NewTime
+// DefaultClock creates a Clock from time.Now
 func DefaultClock() Clock { return ClockFunc(time.Now) }
